@@ -49,18 +49,11 @@ public class ValidateCodeFilter extends AbstractGatewayFilterFactory<Object>
             {
                 return chain.filter(exchange);
             }
-
-            try
-            {
-                String rspStr = resolveBodyFromRequest(request);
-                JSONObject obj = JSON.parseObject(rspStr);
-                validateCodeService.checkCaptcha(obj.getString(CODE), obj.getString(UUID));
-            }
-            catch (Exception e)
-            {
-                return ServletUtils.webFluxResponseWriter(exchange.getResponse(), e.getMessage());
-            }
-            return chain.filter(exchange);
+            String rspStr = resolveBodyFromRequest(request);
+            JSONObject obj = JSON.parseObject(rspStr);
+            return validateCodeService.checkCaptcha(obj.getString(CODE), obj.getString(UUID))
+                    .then(chain.filter(exchange))
+                    .onErrorResume(e -> ServletUtils.webFluxResponseWriter(exchange.getResponse(), e.getMessage()));
         };
     }
 

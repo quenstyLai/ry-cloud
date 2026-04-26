@@ -1,5 +1,6 @@
 package com.ruoyi.gateway.filter;
 
+import com.ruoyi.common.redis.service.ReactiveRedisService;
 import org.slf4j.Logger;
 import org.slf4j.LoggerFactory;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -23,7 +24,7 @@ import reactor.core.publisher.Mono;
 
 /**
  * 网关鉴权
- * 
+ *
  * @author ruoyi
  */
 @Component
@@ -36,7 +37,7 @@ public class AuthFilter implements GlobalFilter, Ordered
     private IgnoreWhiteProperties ignoreWhite;
 
     @Autowired
-    private RedisService redisService;
+    private ReactiveRedisService reactiveRedisService;
 
 
     @Override
@@ -56,31 +57,31 @@ public class AuthFilter implements GlobalFilter, Ordered
         {
             return unauthorizedResponse(exchange, "令牌不能为空");
         }
-        Claims claims = JwtUtils.parseToken(token);
-        if (claims == null)
-        {
-            return unauthorizedResponse(exchange, "令牌已过期或验证不正确！");
-        }
-        String userkey = JwtUtils.getUserKey(claims);
-        boolean islogin = redisService.hasKey(getTokenKey(userkey));
-        if (!islogin)
-        {
-            return unauthorizedResponse(exchange, "登录状态已过期");
-        }
-        String userid = JwtUtils.getUserId(claims);
-        String username = JwtUtils.getUserName(claims);
-        if (StringUtils.isEmpty(userid) || StringUtils.isEmpty(username))
-        {
-            return unauthorizedResponse(exchange, "令牌验证失败");
-        }
-
-        // 设置用户信息到请求
-        addHeader(mutate, SecurityConstants.USER_KEY, userkey);
-        addHeader(mutate, SecurityConstants.DETAILS_USER_ID, userid);
-        addHeader(mutate, SecurityConstants.DETAILS_USERNAME, username);
-        // 内部请求来源参数清除
-        removeHeader(mutate, SecurityConstants.FROM_SOURCE);
-        return chain.filter(exchange.mutate().request(mutate.build()).build());
+        reactiveRedisService.keys("*").doOnNext(key -> {log.info("key:{}", key);});
+        return Mono.just(token)
+                .map(JwtUtils::parseToken)
+                .flatMap(claims -> {
+                    String userKey = JwtUtils.getUserKey(claims);
+                    return reactiveRedisService.hasKey(getTokenKey(userKey))
+                            .flatMap(isLogin -> {
+                                if (!isLogin){
+                                    return unauthorizedResponse(exchange, "登录状态已过期");
+                                }
+                                String userid = JwtUtils.getUserId(claims);
+                                String username = JwtUtils.getUserName(claims);
+                                if (StringUtils.isEmpty(userid) || StringUtils.isEmpty(username))
+                                {
+                                    return unauthorizedResponse(exchange, "令牌验证失败");
+                                }
+                                // 设置用户信息到请求
+                                addHeader(mutate, SecurityConstants.USER_KEY, userKey);
+                                addHeader(mutate, SecurityConstants.DETAILS_USER_ID, userid);
+                                addHeader(mutate, SecurityConstants.DETAILS_USERNAME, username);
+                                // 内部请求来源参数清除
+                                removeHeader(mutate, SecurityConstants.FROM_SOURCE);
+                                return chain.filter(exchange.mutate().request(mutate.build()).build());
+                            });
+                });
     }
 
     private void addHeader(ServerHttpRequest.Builder mutate, String name, Object value)

@@ -3,6 +3,8 @@ package com.ruoyi.gateway.service.impl;
 import java.awt.image.BufferedImage;
 import java.io.IOException;
 import java.util.concurrent.TimeUnit;
+
+import com.ruoyi.common.redis.service.ReactiveRedisService;
 import jakarta.annotation.Resource;
 import javax.imageio.ImageIO;
 import org.springframework.beans.factory.annotation.Autowired;
@@ -19,6 +21,7 @@ import com.ruoyi.common.core.web.domain.AjaxResult;
 import com.ruoyi.common.redis.service.RedisService;
 import com.ruoyi.gateway.config.properties.CaptchaProperties;
 import com.ruoyi.gateway.service.ValidateCodeService;
+import reactor.core.publisher.Mono;
 
 /**
  * 验证码实现处理
@@ -36,6 +39,9 @@ public class ValidateCodeServiceImpl implements ValidateCodeService
 
     @Autowired
     private RedisService redisService;
+
+    @Autowired
+    private ReactiveRedisService reactiveRedisService;
 
     @Autowired
     private CaptchaProperties captchaProperties;
@@ -97,22 +103,22 @@ public class ValidateCodeServiceImpl implements ValidateCodeService
      * 校验验证码
      */
     @Override
-    public void checkCaptcha(String code, String uuid) throws CaptchaException
+    public Mono<Void> checkCaptcha(String code, String uuid) throws CaptchaException
     {
         if (StringUtils.isEmpty(code))
         {
             throw new CaptchaException("验证码不能为空");
         }
         String verifyKey = CacheConstants.CAPTCHA_CODE_KEY + StringUtils.nvl(uuid, "");
-        String captcha = redisService.getCacheObject(verifyKey);
-        if (captcha == null)
-        {
-            throw new CaptchaException("验证码已失效");
-        }
-        redisService.deleteObject(verifyKey);
-        if (!code.equalsIgnoreCase(captcha))
-        {
-            throw new CaptchaException("验证码错误");
-        }
+        return reactiveRedisService.getCacheObject(verifyKey)
+                .switchIfEmpty(Mono.error(new CaptchaException("验证码已失效")))
+                .flatMap(captcha ->{
+                    reactiveRedisService.deleteObject(verifyKey);
+                    if (!code.equalsIgnoreCase(String.valueOf(captcha)))
+                    {
+                        return Mono.error(new CaptchaException("验证码错误"));
+                    }
+                    return Mono.empty();
+                });
     }
 }
