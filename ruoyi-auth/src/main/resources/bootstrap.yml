@@ -1,9 +1,9 @@
 # Tomcat
-server: 
-  port: 9200
+server:
+  port: 9211
 
 # Spring
-spring: 
+spring:
   application:
     # 应用名称
     name: ruoyi-auth
@@ -12,6 +12,8 @@ spring:
     active: dev
   cloud:
     nacos:
+      username: ruoyi
+      password: ruoyi
       discovery:
         # 服务注册地址
         server-addr: 127.0.0.1:8848

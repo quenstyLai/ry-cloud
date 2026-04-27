@@ -12,6 +12,8 @@ spring:
     active: dev
   cloud:
     nacos:
+      username: ruoyi
+      password: ruoyi
       discovery:
         # 服务注册地址
         server-addr: 127.0.0.1:8848
@@ -28,11 +30,15 @@ spring:
       datasource:
         ds1:
           nacos:
+            username: ruoyi
+            password: ruoyi
             server-addr: 127.0.0.1:8848
             dataId: sentinel-ruoyi-gateway
             groupId: DEFAULT_GROUP
             data-type: json
             rule-type: gw-flow
+      filter:
+        enabled: false
   config:
     # 配置文件格式
     file-extension: yml
